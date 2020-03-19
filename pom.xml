@@ -46,6 +46,13 @@
 		</dependency>
 	</dependencies>
 	
+	<distributionManagement>
+		<repository>
+			<id>localised-repo</id>
+			<url>file:///${user.home}/maven-distribution/</url>
+		</repository>
+	</distributionManagement>
+	
 	<build>
 		<plugins>
 			<plugin>
