@@ -97,7 +97,7 @@ application: [TeaSite compilation](./examples/teasite_compilation.jsb)
 
 ---
 
-## How to installű
+## How to install
 
 ### What is this $PATH stuff?
 

@@ -1,2 +1,0 @@
-#!/bin/bash
-java -jar /home/szupervigyor/projektek/Javaexperience/maven/JavaShebang/target/jsb-jar-with-dependencies.jar "$@"
