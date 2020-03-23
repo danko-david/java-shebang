@@ -21,7 +21,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import org.mdkt.compiler.CustomInMemoryJavaCompiler;
-import org.mdkt.compiler.InMemoryJavaCompiler;
 import org.sonatype.aether.artifact.Artifact;
 import org.sonatype.aether.graph.Dependency;
 
@@ -47,6 +46,10 @@ import static eu.javaexperience.shebang.ShebangTools.*;
  * */
 public class JavaShebang
 {
+	protected static final OpenURLClassLoader CLASS_LOADER = new OpenURLClassLoader(ClassLoader.getSystemClassLoader());
+	
+	protected static boolean MISSING_RT_JAR = false;
+	
 	public static List<String> collectClassFilesystems()
 	{
 		List<String> ret = new ArrayList<>();
@@ -63,16 +66,10 @@ public class JavaShebang
 			}
 		};
 		
-		ClassLoader cl = ClassLoader.getSystemClassLoader();
-		
-		//TODO java 11 doesn't use url class loader
-		if(cl instanceof URLClassLoader)
+		URL[] urls = ((URLClassLoader)CLASS_LOADER).getURLs();
+		for(URL url: urls)
 		{
-			URL[] urls = ((URLClassLoader)cl).getURLs();
-			for(URL url: urls)
-			{
-				add.accept(url.getFile());
-			}
+			add.accept(url.getFile());
 		}
 		
 		String value = System.getProperty("sun.boot.class.path");
@@ -82,6 +79,17 @@ public class JavaShebang
 			{
 				add.accept(f);
 			}
+		}
+		else
+		{
+			/**
+			 * Java 11 doesn't have this boot path...
+			 * And i found no way list them.
+			 * So i use the backed in list of available classes
+			 * This is basically bad, because over time the list base classes
+			 * may modify... But this also faster
+			 */
+			MISSING_RT_JAR = true;
 		}
 		
 		return ret;
@@ -127,6 +135,17 @@ public class JavaShebang
 				ret.put(shortName, name);
 			}
 		};
+		
+		if(MISSING_RT_JAR)
+		{
+			try(InputStream is = ClassLoader.getSystemResourceAsStream("eu/javaexperience/shebang/shebang-fallback-base-classes.lst"))
+			{
+				for(String cls:new String(ShebangTools.loadAllFromInputStream(is)).split("\n"))
+				{
+					acceptClass.accept(cls);
+				}
+			}
+		}
 		
 		for(String fs:fss)
 		{
@@ -193,43 +212,10 @@ public class JavaShebang
 		;
 	}
 	
-	protected static final Consumer<URL> ADD_URL_TO_CLASSPATH;
-	
-	static
-	{
-		URLClassLoader cl = (URLClassLoader) ClassLoader.getSystemClassLoader();
-		Method _m = null;
-		try
-		{
-			_m = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
-		}
-		catch (Exception e)
-		{
-			propagateAnyway(e);
-		}
-		
-		Method m = _m;
-		m.setAccessible(true);
-		
-		ADD_URL_TO_CLASSPATH = (u)->
-		{
-			try
-			{
-				m.invoke(cl, u);
-			}
-			catch(Exception e)
-			{
-				propagateAnyway(e);
-			}
-			
-			//java compiler looks like uses the java.class.path to discover classes to compile
-			System.setProperty("java.class.path", System.getProperty("java.class.path")+":"+u.getFile());
-		};
-	}
-	
 	public static void addJarToClassPath(String path) throws MalformedURLException
 	{
-		ADD_URL_TO_CLASSPATH.accept(new File(path).toURI().toURL());
+		CLASS_LOADER.addURL(new File(path).toURI().toURL());
+		System.setProperty("java.class.path", System.getProperty("java.class.path")+":"+path);
 	}
 	
 	protected static void addMavenDependencies(Set<String> deps) throws Exception
@@ -356,7 +342,7 @@ public class JavaShebang
 		{
 			//Don't initialise the class it might fail (eg for Teasite classes) and
 			//it also increases the time of run and memory usage
-			Class c = Class.forName(name, false, ClassLoader.getSystemClassLoader());
+			Class c = Class.forName(name, false, CLASS_LOADER);
 			return Modifier.isPublic(c.getModifiers());
 		}
 		catch(Throwable e)
@@ -454,7 +440,7 @@ public class JavaShebang
 	
 	public static Class compileClass(String className, String content) throws Exception
 	{
-		CustomInMemoryJavaCompiler compiler = new CustomInMemoryJavaCompiler().ignoreWarnings();
+		CustomInMemoryJavaCompiler compiler = new CustomInMemoryJavaCompiler().useParentClassLoader(CLASS_LOADER).ignoreWarnings();
 		//make compiled classed available for the current context
 		Thread.currentThread().setContextClassLoader(compiler.getClassloader());
 		return compiler.compile(className, content);

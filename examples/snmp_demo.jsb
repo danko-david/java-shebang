@@ -7,6 +7,7 @@
  */
 
 import eu.javaexperience.log.LogLevel;
+import eu.linuxengineering.snmp.SnmpTools;
 
 public class SnmpDemoServer
 {
