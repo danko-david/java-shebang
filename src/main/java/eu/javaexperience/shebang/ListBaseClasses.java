@@ -6,7 +6,8 @@ public class ListBaseClasses
 {
 	public static void main(String[] args) throws Throwable
 	{
-		Pattern exclude = Pattern.compile("\\$\\d+$");
+		//exclude listed packages (sun, oracle, etc) and anonymus classes
+		Pattern exclude = Pattern.compile("(((sun|oracle|jdk)\\.)|(\\$\\d+$))");
 		__MultiMap<String, String> clss = JavaShebang.collectAvailableClasses();
 		for(String cls:clss.values())
 		{

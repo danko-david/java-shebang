@@ -262,6 +262,8 @@ public class JavaShebang
 	
 	public static final Pattern NEW_LINE = Pattern.compile("(\r\n|\r|\n)");
 	
+	protected static boolean AUTO_IMPORT = true;
+	
 	protected static void processInstructions(String instr) throws Exception
 	{
 		if(null == instr)
@@ -288,6 +290,11 @@ public class JavaShebang
 				}
 				deps.add(dep);
 			}
+			else if(line.startsWith("@autoimport-off"))
+			{
+				AUTO_IMPORT = false;
+			}
+			
 		}
 		
 		addMavenDependencies(deps);
@@ -304,15 +311,17 @@ public class JavaShebang
 		//feed the file and parameters
 		String content = getFileContents(args[0]);
 		
-		//TODO get comment at the beginning
-		//TODO get source after the optional comment
-
 		String instComments = loadInstructionComments(content);
 		
 		processInstructions(instComments);
 		
 		//remove the shebang
-		String src = getSubstringAfterFirstString(content, "\n", content);
+		String src = content;
+		if(content.startsWith("#!"))
+		{
+			src = getSubstringAfterFirstString(content, "\n", content);
+		}
+		
 		if(null == src)
 		{
 			System.err.println("Can't read the source to compile.");
@@ -416,11 +425,6 @@ public class JavaShebang
 				}
 				else if(k.size() == 1)
 				{
-					if(!isClassAvailable(k.get(0)))
-					{
-						System.err.println("The only found variant of `"+req+"` is `"+k.get(0)+"` which is not accessible");
-					}
-					
 					appendImport(sb, k.get(0));
 				}
 				else
@@ -446,30 +450,52 @@ public class JavaShebang
 		return compiler.compile(className, content);
 	}
 	
-	public static void compileAndRun(String src, String[] args) throws Exception
+	/**
+	 * not a complete, but heuristic solution. AST would be better, see this:
+	 *  String text = "example / * * / text"
+	 */
+	protected static String stripComments(String source)
+	{
+		source = Pattern.compile("/\\*.*?\\*/", Pattern.MULTILINE | Pattern.DOTALL).matcher(source).replaceAll("");
+		source = source.replaceAll("//.*$", "");
+		return source;
+	}
+	
+	protected static String findClassName(String strippedSource)
 	{
 		Pattern p = Pattern.compile("class\\s+(?<cls>[^\\s]+)\\s+", Pattern.MULTILINE);
-		Matcher m = p.matcher(src);
-		if(!m.find())
+		Matcher m = p.matcher(strippedSource);
+		if(m.find())
 		{
-			System.err.println("No class name found");
-			System.exit(3);
+			return m.group("cls");
 		}
 		
-		Set<String> reqClasses = getReferencedClasses(src);
+		System.err.println("No class name found");
+		System.exit(3);
+		return null;//keep compiler happy
+	}
+	
+	public static void compileAndRun(String src, String[] args) throws Exception
+	{
+		String stripSource = stripComments(src);
+		String clsName = findClassName(stripSource);
 		
 		StringBuilder sb = new StringBuilder();
 		
-		//TODO exclude import with exact names 
-		Set<String> selectedClasses = new HashSet<>();
-		__MultiMap<String, String> knownClasses = collectAvailableClasses();
-		
-		checkAndAddAutoImport(sb, knownClasses, reqClasses, selectedClasses);
+		//TODO exclude import with exact names
+		if(AUTO_IMPORT)
+		{
+			Set<String> reqClasses = getReferencedClasses(stripSource);
+			Set<String> selectedClasses = new HashSet<>();
+			__MultiMap<String, String> knownClasses = collectAvailableClasses();
+			
+			checkAndAddAutoImport(sb, knownClasses, reqClasses, selectedClasses);
+		}
 		
 		sb.append("\n");
 		sb.append(src);
 		
-		Class c = compileClass(m.group("cls"), sb.toString());
+		Class c = compileClass(clsName, sb.toString());
 		
 		Method main = c.getDeclaredMethod("main", new Class[] {String[].class});
 		if(null == main)
