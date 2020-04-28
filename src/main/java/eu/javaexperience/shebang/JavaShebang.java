@@ -50,6 +50,8 @@ public class JavaShebang
 	
 	protected static boolean MISSING_RT_JAR = false;
 	
+	protected static boolean LOG_PREPARATION_TIME = null != System.getenv("JSB_VERBOSE_TIMES");
+	
 	public static List<String> collectClassFilesystems()
 	{
 		List<String> ret = new ArrayList<>();
@@ -220,6 +222,7 @@ public class JavaShebang
 	
 	protected static void addMavenDependencies(Set<String> deps) throws Exception
 	{
+		TIME_CHECKPOINT = System.currentTimeMillis();
 		NaetherImpl naether = new NaetherImpl();
 		
 		for(String dep:deps)
@@ -243,6 +246,11 @@ public class JavaShebang
 			}
 		}
 		
+		if(LOG_PREPARATION_TIME)
+		{
+			System.err.println("JSB: before dependencies resolved tooks: "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+		}
+		
 		try
 		{
 			naether.resolveDependencies();
@@ -252,11 +260,23 @@ public class JavaShebang
 			e.printStackTrace();
 		}
 		
+		if(LOG_PREPARATION_TIME)
+		{
+			System.err.println("JSB: after dependencies resolved tooks: "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+			TIME_CHECKPOINT = System.currentTimeMillis();
+		}
+		
 		Collection<Dependency> ds = naether.currentDependencies();
 		for(Dependency d:ds)
 		{
 			//TODO log System.out.println(d);
 			addJarToClassPath(getLocalDependencyFile(d));
+		}
+		
+		if(LOG_PREPARATION_TIME)
+		{
+			System.err.println("JSB: add dependencies ("+ds.size()+"): "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+			TIME_CHECKPOINT = System.currentTimeMillis();
 		}
 	}
 	
@@ -300,8 +320,17 @@ public class JavaShebang
 		addMavenDependencies(deps);
 	}
 	
+	protected static long TIME_START = System.currentTimeMillis();
+	protected static long TIME_CHECKPOINT;
+	
 	public static void main(String[] args) throws Throwable
 	{
+		if(LOG_PREPARATION_TIME)
+		{
+			System.err.println("JSB: enter jsb main "+(System.currentTimeMillis()-TIME_START)+" ms");
+			TIME_CHECKPOINT = System.currentTimeMillis();
+		}
+		
 		if(args.length < 1)
 		{
 			System.err.println("Specify a script file");
@@ -312,6 +341,12 @@ public class JavaShebang
 		String content = getFileContents(args[0]);
 		
 		String instComments = loadInstructionComments(content);
+		
+		if(LOG_PREPARATION_TIME)
+		{
+			System.err.println("JSB: load file tooks: "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+			TIME_CHECKPOINT = System.currentTimeMillis();
+		}
 		
 		processInstructions(instComments);
 		
@@ -444,10 +479,22 @@ public class JavaShebang
 	
 	public static Class compileClass(String className, String content) throws Exception
 	{
+		TIME_CHECKPOINT = System.currentTimeMillis();
 		CustomInMemoryJavaCompiler compiler = new CustomInMemoryJavaCompiler().useParentClassLoader(CLASS_LOADER).ignoreWarnings();
 		//make compiled classed available for the current context
 		Thread.currentThread().setContextClassLoader(compiler.getClassloader());
-		return compiler.compile(className, content);
+		try
+		{
+			return compiler.compile(className, content);
+		}
+		finally
+		{
+			if(LOG_PREPARATION_TIME)
+			{
+				System.err.println("JSB: class compilation tooks: "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+				TIME_CHECKPOINT = System.currentTimeMillis();
+			}
+		}
 	}
 	
 	/**
@@ -477,19 +524,35 @@ public class JavaShebang
 	
 	public static void compileAndRun(String src, String[] args) throws Exception
 	{
+		TIME_CHECKPOINT = System.currentTimeMillis();
+		
 		String stripSource = stripComments(src);
 		String clsName = findClassName(stripSource);
 		
 		StringBuilder sb = new StringBuilder();
+
+		if(LOG_PREPARATION_TIME)
+		{
+			System.err.println("JSB: prepare source tooks: "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+			TIME_CHECKPOINT = System.currentTimeMillis();
+		}
 		
 		//TODO exclude import with exact names
 		if(AUTO_IMPORT)
 		{
+			TIME_CHECKPOINT = System.currentTimeMillis();
+			
 			Set<String> reqClasses = getReferencedClasses(stripSource);
 			Set<String> selectedClasses = new HashSet<>();
 			__MultiMap<String, String> knownClasses = collectAvailableClasses();
 			
 			checkAndAddAutoImport(sb, knownClasses, reqClasses, selectedClasses);
+			
+			if(LOG_PREPARATION_TIME)
+			{
+				System.err.println("JSB: auto import tooks: "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+				TIME_CHECKPOINT = System.currentTimeMillis();
+			}
 		}
 		
 		sb.append("\n");
@@ -504,6 +567,11 @@ public class JavaShebang
 			System.exit(4);
 		}
 		
+		if(LOG_PREPARATION_TIME)
+		{
+			System.err.println("JSB: before invoke `main`: "+(System.currentTimeMillis()-TIME_CHECKPOINT)+" ms, total: "+(System.currentTimeMillis()-TIME_START));
+			TIME_CHECKPOINT = System.currentTimeMillis();
+		}
 		main.invoke(null, new Object[] {args});
 	}
 
