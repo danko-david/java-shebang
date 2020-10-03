@@ -49,6 +49,10 @@ You just have to write eg.: Map or ArrayList and (if there's only one
 exists on the classpath) this generates import declarations automatically.
 Of course using import decalarations are still permitted and required in case
 when multiple class with the same name appears in the classpath.
+  
+Your can turn off this feature by adding this annotation: `@autoimport-off`.
+In this case you have to specify all used classes manually.
+
 
 ### Maven dependency resolution
 
