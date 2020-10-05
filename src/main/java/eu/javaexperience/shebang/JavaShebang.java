@@ -348,8 +348,10 @@ public class JavaShebang
 			TIME_CHECKPOINT = System.currentTimeMillis();
 		}
 		
-		processInstructions(instComments);
-		
+		if(null != instComments)
+		{
+			processInstructions(instComments);
+		}
 		//remove the shebang
 		String src = content;
 		if(content.startsWith("#!"))
@@ -512,14 +514,22 @@ public class JavaShebang
 	{
 		Pattern p = Pattern.compile("class\\s+(?<cls>[^\\s]+)\\s+", Pattern.MULTILINE);
 		Matcher m = p.matcher(strippedSource);
-		if(m.find())
+		if(!m.find())
 		{
-			return m.group("cls");
+			System.err.println("No class name found");
+			System.exit(3);
 		}
 		
-		System.err.println("No class name found");
-		System.exit(3);
-		return null;//keep compiler happy
+		String cls = m.group("cls");
+		
+		Pattern pack = Pattern.compile("^(\\s*)package\\s+(?<package>[^;]+);", Pattern.MULTILINE);
+		Matcher pak = pack.matcher(strippedSource);
+		if(pak.find())
+		{
+			cls = pak.group("package")+"."+cls;
+		}
+		
+		return cls;
 	}
 	
 	public static void compileAndRun(String src, String[] args) throws Exception
