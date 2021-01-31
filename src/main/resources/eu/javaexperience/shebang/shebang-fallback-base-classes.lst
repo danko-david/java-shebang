@@ -1105,6 +1105,7 @@ javax.xml.ws.WebServiceContext
 javax.rmi.CORBA.GetORBPropertiesFileAction
 javax.rmi.GetORBPropertiesFileAction
 java.io.FilenameFilter
+java.io.File
 javax.xml.parsers.ParserConfigurationException
 java.util.stream.StreamShape
 java.lang.instrument.ClassFileTransformer
